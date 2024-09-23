@@ -21,7 +21,12 @@ let rec sort l=
   | [x] -> [x]
   | _ ->
     let l1,l2 = split l in
-    merge (sort l1) (sort l2)
-let list_to_sort = [5; 1; 9; 3; 7; 2] ;;
+    merge (sort l1) (sort l2);;
 
-sort list_to_sort
+sort [];;  (* Expected output: [] *)
+sort [42];;  (* Expected output: [42] *)
+sort [3; 1; 4; 1; 5; 9; 2; 6; 5; 3; 5];;  (* Expected output: [1; 1; 2; 3; 3; 4; 5; 5; 5; 6; 9] *)
+sort [1; 2; 3; 4; 5];;  (* Expected output: [1; 2; 3; 4; 5] *)
+sort [5; 5; 3; 1; 2; 2];;  (* Expected output: [1; 2; 2; 3; 5; 5] *)
+sort [-1; -3; 0; -2];;  (* Expected output: [-3; -2; -1; 0] *)
+sort [-5; 1; 0; 3; -2; -1];;  (* Expected output: [-5; -2; -1; 0; 1; 3] *)

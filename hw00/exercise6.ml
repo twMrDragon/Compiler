@@ -9,7 +9,7 @@ let rev l =
   | [] -> acc
   | hd::tl -> aux (hd::acc) tl
   in
-  aux [] l ;;
+  aux [] l;;
 
 rev l
 
