@@ -1,0 +1,164 @@
+import java_cup.runtime.*;
+import java.util.*;
+
+terminal Ident IDENT;
+terminal Constant CST;
+terminal Binop CMP;
+terminal INCINDENT;
+terminal Integer DECINDENT;
+terminal  DEF, IF, ELSE, RETURN, PRINT, FOR, IN, AND, OR, NOT,
+	     LP, RP, LSQ, RSQ, COMMA, EQUAL, COLON, BEGIN, END, NEWLINE,
+		  PLUS, MINUS, TIMES, DIV, MOD;
+terminal UMINUS;
+
+non terminal File file;
+non terminal Def def;
+non terminal opt_newline;
+non terminal LinkedList<Def> list_def;
+non terminal LinkedList<Stmt> list_stmt, nonempty_list_stmt;
+non terminal LinkedList<Ident> list_comma_ident, nonempty_list_comma_ident;
+non terminal Stmt simple_stmt, stmt, suite;
+non terminal Expr expr;
+non terminal LinkedList<Expr> nonempty_list_comma_expr, list_comma_expr;
+
+precedence left OR;
+precedence left AND;
+precedence nonassoc NOT;
+precedence nonassoc CMP;
+precedence left PLUS, MINUS;
+precedence left TIMES, DIV, MOD;
+precedence nonassoc UMINUS;
+precedence nonassoc LSQ;
+
+start with file;
+
+file ::=
+  opt_newline list_def:l nonempty_list_stmt:b
+    {: RESULT = new File(l, new Sblock(b)); :}
+;
+
+def ::=
+  DEF IDENT:f LP list_comma_ident:x RP COLON suite:s
+    {: RESULT = new Def(f, x, s); :}
+;
+
+suite ::=
+ simple_stmt:s NEWLINE
+    {: RESULT = s; :}
+| NEWLINE BEGIN nonempty_list_stmt:l END
+    {: RESULT = new Sblock(l); :}
+;
+
+stmt ::=
+  simple_stmt:s NEWLINE
+    {: RESULT =  s; :}
+| IF expr:c COLON suite:s
+    {: RESULT =  new Sif(c, s, new Sblock()); :}
+| IF expr:c COLON suite:s1 ELSE COLON suite:s2
+    {: RESULT =  new Sif(c, s1, s2); :}
+| FOR IDENT:x IN expr:e COLON suite:s
+    {: RESULT =  new Sfor(x, e, s); :}
+;
+
+simple_stmt ::=
+  RETURN expr:e
+    {: RESULT =  new Sreturn(e); :}
+| IDENT:id EQUAL expr:e
+    {: RESULT =  new Sassign(id, e); :}
+| expr:e1 LSQ expr:e2 RSQ EQUAL expr:e3
+    {: RESULT =  new Sset(e1, e2, e3); :}
+| PRINT LP expr:e RP
+    {: RESULT =  new Sprint(e); :}
+| expr:e
+    {: RESULT =  new Seval(e); :}
+;
+
+expr ::=
+  CST:c
+    {: RESULT = new Ecst(c); :}
+| IDENT:id
+    {: RESULT = new Eident(id); :}
+| expr:e1 LSQ expr:e2 RSQ
+    {: RESULT = new Eget(e1, e2); :}
+| MINUS expr:e1
+    {: RESULT = new Eunop(Unop.Uneg, e1); :}
+  %prec UMINUS
+| NOT expr:e1
+    {: RESULT = new Eunop(Unop.Unot, e1); :}
+| expr:e1 PLUS expr:e2
+    {: RESULT = new Ebinop(Binop.Badd, e1, e2); :}
+| expr:e1 MINUS expr:e2
+    {: RESULT = new Ebinop(Binop.Bsub, e1, e2); :}
+| expr:e1 TIMES expr:e2
+    {: RESULT = new Ebinop(Binop.Bmul, e1, e2); :}
+| expr:e1 DIV expr:e2
+    {: RESULT = new Ebinop(Binop.Bdiv, e1, e2); :}
+| expr:e1 MOD expr:e2
+    {: RESULT = new Ebinop(Binop.Bmod, e1, e2); :}
+| expr:e1 CMP:c expr:e2
+    {: RESULT = new Ebinop(c, e1, e2); :}
+| expr:e1 AND expr:e2
+    {: RESULT = new Ebinop(Binop.Band, e1, e2); :}
+| expr:e1 OR expr:e2
+    {: RESULT = new Ebinop(Binop.Bor, e1, e2); :}
+| IDENT:f LP list_comma_expr:l RP
+    {: RESULT = new Ecall (f, l); :}
+| LSQ list_comma_expr:l RSQ
+    {: RESULT = new Elist(l); :}
+| LP expr:e RP
+    {: RESULT = e; :}
+;
+
+list_comma_expr ::=
+  nonempty_list_comma_expr:l
+   {: RESULT = l; :}
+|
+   {: RESULT = new LinkedList<Expr>(); :}
+;
+
+nonempty_list_comma_expr ::=
+  expr:x COMMA nonempty_list_comma_expr:l
+   {: l.addFirst(x); RESULT = l; :}
+| expr:x
+   {: LinkedList<Expr> l = new LinkedList<Expr>();
+      l.add(x); RESULT = l; :}
+;
+
+list_comma_ident ::=
+  nonempty_list_comma_ident:l
+   {: RESULT = l; :}
+|
+   {: RESULT = new LinkedList<Ident>(); :}
+;
+
+nonempty_list_comma_ident ::=
+  IDENT:x COMMA nonempty_list_comma_ident:l
+   {: l.addFirst(x); RESULT = l; :}
+| IDENT:x
+   {: LinkedList<Ident> l = new LinkedList<Ident>();
+      l.add(x); RESULT = l; :}
+;
+
+list_def ::=
+  def:d list_def:l
+   {: l.addFirst(d); RESULT = l; :}
+|
+   {: RESULT = new LinkedList<Def>(); :}
+;
+
+nonempty_list_stmt ::=
+  stmt:s list_stmt:l
+   {: l.addFirst(s); RESULT = l; :}
+;
+
+list_stmt ::=
+  stmt:s list_stmt:l
+   {: l.addFirst(s); RESULT = l; :}
+|
+   {: RESULT = new LinkedList<Stmt>(); :}
+;
+
+opt_newline ::=
+  NEWLINE
+|
+;

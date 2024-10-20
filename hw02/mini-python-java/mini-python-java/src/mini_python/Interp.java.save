@@ -1,0 +1,355 @@
+package mini_python;
+
+import java.util.HashMap;
+import java.util.Iterator;
+
+/* Les valeurs de mini-Python
+
+   - une différence notable avec Python : on
+     utilise ici le type int alors que les entiers de Python sont de
+     précision arbitraire ; on pourrait utiliser les grands entiers de Java
+     mais on choisit la facilité
+   - ce que Python appelle une liste est en réalité un tableau
+     redimensionnable ; dans le fragment considéré ici, il n'y a pas
+     de possibilité d'en modifier la longueur, donc un simple tableau
+     convient */
+
+abstract class Value implements Comparable<Value> {
+	abstract boolean isFalse();
+
+	boolean isTrue() {
+		throw new Todo(); // à compléter (question 2)
+	}
+
+	int asInt() {
+		if (!(this instanceof Vint))
+			throw new Error("integer expected");
+		return ((Vint) this).i;
+	}
+
+	Vlist asList() {
+		if (!(this instanceof Vlist))
+			throw new Error("list expected");
+		return (Vlist) this;
+	}
+}
+
+class Vnone extends Value {
+	@Override
+	boolean isFalse() {
+		throw new Todo(); // à compléter (question 2)
+	}
+
+	@Override
+	public String toString() {
+		return "None";
+	}
+
+	@Override
+	public int compareTo(Value o) {
+		return o instanceof Vnone ? 0 : -1;
+	}
+}
+
+class Vbool extends Value {
+	final boolean b;
+
+	Vbool(boolean b) {
+		this.b = b;
+	}
+
+	@Override
+	boolean isFalse() {
+		throw new Todo(); // à compléter (question 2)
+	}
+
+	@Override
+	public String toString() {
+		return this.b ? "True" : "False";
+	}
+
+	@Override
+	public int compareTo(Value o) {
+		if (o instanceof Vnone)
+			return 1;
+		if (o instanceof Vbool) {
+			boolean ob = ((Vbool) o).b;
+			return b ? (ob ? 0 : 1) : (ob ? -1 : 0);
+		}
+		return -1;
+	}
+}
+
+class Vint extends Value {
+	final int i;
+
+	Vint(int i) {
+		this.i = i;
+	}
+
+	@Override
+	boolean isFalse() {
+		throw new Todo(); // à compléter (question 2)
+	}
+
+	@Override
+	public String toString() {
+		return "" + this.i;
+	}
+
+	@Override
+	public int compareTo(Value o) {
+		if (o instanceof Vnone || o instanceof Vbool)
+			return 1;
+		if (o instanceof Vint)
+			return this.i - o.asInt();
+		return -1;
+	}
+}
+
+class Vstring extends Value {
+	final String s;
+
+	Vstring(String s) {
+		this.s = s;
+	}
+
+	@Override
+	boolean isFalse() {
+		throw new Todo(); // à compléter (question 2)
+	}
+
+	@Override
+	public String toString() {
+		return this.s;
+	}
+
+	@Override
+	public int compareTo(Value o) {
+		if (o instanceof Vnone || o instanceof Vbool || o instanceof Vint)
+			return 1;
+		if (o instanceof Vstring)
+			return this.s.compareTo(((Vstring) o).s);
+		return -1;
+	}
+}
+
+class Vlist extends Value {
+	final Value[] l;
+
+	Vlist(int n) {
+		this.l = new Value[n];
+	}
+
+	Vlist(Value[] l1, Value[] l2) {
+		this.l = new Value[l1.length + l2.length];
+		System.arraycopy(l1, 0, l, 0, l1.length);
+		System.arraycopy(l2, 0, l, l1.length, l2.length);
+	}
+
+	@Override
+	boolean isFalse() {
+		throw new Todo(); // à compléter (question 2)
+	}
+
+	@Override
+	public String toString() {
+		StringBuffer b = new StringBuffer();
+		b.append("[");
+		for (int i = 0; i < this.l.length; i++) {
+			if (i != 0)
+				b.append(", ");
+			b.append(this.l[i]);
+		}
+		b.append("]");
+		return b.toString();
+	}
+
+	@Override
+	public int compareTo(Value o) {
+		if (!(o instanceof Vlist))
+			return -1;
+		Value[] ol = ((Vlist) o).l;
+		int n1 = this.l.length, n2 = ol.length;
+		int i1 = 0, i2 = 0;
+		for (; i1 < n1 && i2 < n2; i1++, i2++) {
+			Value v1 = this.l[i1];
+			Value v2 = ol[i2];
+			int c = v1.compareTo(v2);
+			if (c != 0)
+				return c;
+		}
+		if (i1 < n1)
+			return 1;
+		if (i2 < n2)
+			return -1;
+		return 0;
+	}
+}
+
+/* on utilise l'exception ci-dessous pour interpréter la construction return
+ * de mini-Python */
+
+class Return extends Exception {
+	private static final long serialVersionUID = 1L;
+	
+	final Value v;
+
+	Return(Value v) {
+		this.v = v;
+	}
+}
+
+class Todo extends Error {
+	private static final long serialVersionUID = 1L;
+}
+
+/* l'interprète */
+
+class Interp implements Interpreter {
+
+	// variables de mini-Python (globales, locales, arguments)
+	HashMap<String, Value> vars;
+
+	Interp() {
+		this.vars = new HashMap<String, Value>();
+	}
+
+	// les définitions de fonctions
+	static HashMap<String, Def> functions = new HashMap<String, Def>();
+
+	// interprétation d'une opération binaire sur deux valeurs
+	static Value binop(Binop op, Value v1, Value v2) {
+		switch (op) {
+		case Bsub:
+		case Bmul:
+		case Bdiv:
+		case Bmod:
+			throw new Todo(); // à compléter (question 1)
+		case Badd:
+			if (v1 instanceof Vint && v2 instanceof Vint)
+				throw new Todo(); // à compléter (question 1)
+			if (v1 instanceof Vstring && v2 instanceof Vstring)
+				throw new Todo(); // à compléter (question 3)
+			if (v1 instanceof Vlist && v2 instanceof Vlist)
+				throw new Todo(); // à compléter (question 5)
+			break;
+		case Beq:
+			throw new Todo(); // à compléter (question 2)
+		case Bneq:
+			throw new Todo(); // à compléter (question 2)
+		case Blt:
+			throw new Todo(); // à compléter (question 2)
+		case Ble:
+			throw new Todo(); // à compléter (question 2)
+		case Bgt:
+			throw new Todo(); // à compléter (question 2)
+		case Bge:
+			throw new Todo(); // à compléter (question 2)
+		default:
+		}
+		throw new Error("unsupported operand types");
+	}
+
+	// interprétation des différentes constructions de mini-Python
+
+	@Override
+	public Value interp(Ecst e) {
+		return e.c.interp();
+	}
+
+	@Override
+	public Value interp(Ebinop e) {
+		Value v1 = e.e1.accept(this);
+		switch (e.op) {
+		case Band:
+			throw new Todo(); // à compléter (question 2)
+		case Bor:
+			throw new Todo(); // à compléter (question 2)
+		default:
+			return binop(e.op, v1, e.e2.accept(this));
+		}
+	}
+
+	@Override
+	public Value interp(Eunop e) {
+		switch (e.op) {
+		case Unot:
+			throw new Todo(); // à compléter (question 2)
+		case Uneg:
+			throw new Todo(); // à compléter (question 1)
+		}
+		throw new Error("unreachable");
+	}
+
+	@Override
+	public Value interp(Eident e) {
+		throw new Todo(); // à compléter (question 3)
+	}
+
+	@Override
+	public Value interp(Ecall e) {
+		switch (e.f) {
+		case "len":
+			throw new Todo(); // à compléter (question 5)
+		case "range":
+			throw new Todo(); // à compléter (question 5)
+		default:
+			throw new Todo(); // à compléter (question 4)
+		}
+	}
+
+	@Override
+	public Value interp(Elist e) {
+		throw new Todo(); // à compléter (question 5)
+	}
+
+	@Override
+	public Value interp(Eget e) {
+		throw new Todo(); // à compléter (question 5)
+	}
+
+	/* instructions */
+	
+	@Override
+	public void interp(Seval s) throws Return {
+		s.e.accept(this);
+	}
+
+	@Override
+	public void interp(Sprint s) throws Return {
+		System.out.println(s.e.accept(this).toString());
+	}
+
+	@Override
+	public void interp(Sblock s) throws Return {
+		for (Stmt st: s.l)
+			st.accept(this);
+	}
+
+	@Override
+	public void interp(Sif s) throws Return {
+		throw new Todo(); // à compléter (question 2)
+	}
+
+	@Override
+	public void interp(Sassign s) throws Return {
+		throw new Todo(); // à compléter (question 3)
+	}
+
+	@Override
+	public void interp(Sreturn s) throws Return {
+		throw new Todo(); // à compléter (question 4)
+	}
+
+	@Override
+	public void interp(Sfor s) throws Return {
+		throw new Todo(); // à compléter (question 5)
+	}
+
+	@Override
+	public void interp(Sset s) throws Return {
+		throw new Todo(); // à compléter (question 5)
+	}
+
+}
