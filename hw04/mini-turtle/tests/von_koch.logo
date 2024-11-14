@@ -1,0 +1,23 @@
+
+(* Von Koch's snowflake *)
+
+def von_koch(n, d) {
+  if n {
+    von_koch (n-1, d/3)
+    turnleft 60
+    von_koch (n-1, d/3)
+    turnright 120
+    von_koch (n-1, d/3)
+    turnleft 60
+    von_koch (n-1, d/3)
+  } else
+    forward d
+}
+
+penup
+forward -100
+turnright 90
+forward -100
+turnleft 90
+pendown
+repeat 6 { von_koch(3, 200) turnright 60 }

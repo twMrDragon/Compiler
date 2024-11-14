@@ -1,0 +1,39 @@
+
+def zig(n) {
+  if n - 1 {
+    zig(n/2)
+    zag(n/2)
+    zig(n/2)
+    zag(n/2)
+  } else {
+    turnleft 90
+    forward 15
+    turnleft 90
+    forward 15
+  }
+}
+
+def zag(n) {
+  if n - 1 {
+    zag(n/2)
+    zag(n/2)
+    zig(n/2)
+    zag(n/2)
+  } else {
+    turnright 90
+    forward 15
+    turnright 90
+    forward 15
+    turnleft 90
+    forward 15
+  }
+}
+
+penup
+forward -250
+turnright 90
+forward 250
+pendown
+zig(16)
+color red
+zig(16)

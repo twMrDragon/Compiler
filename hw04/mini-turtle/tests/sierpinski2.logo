@@ -1,0 +1,35 @@
+(* Sierpinski triangle (Gabriel DORIATH DÖHLER) *)
+
+def main(n, d, a) {
+  turnleft_if_n_odd(n + 1, a)
+  curve(n, d, a)
+}
+
+def turnleft_if_n_odd(n, a) {
+  if n {
+    turnleft(a)
+    turnleft_if_n_odd(n - 1, -a)
+  }
+}
+
+def curve(n, d, a) {
+  if n {
+    curve(n - 1, d / 2, -a)
+    turnleft a
+    curve(n - 1, d / 2, a)
+    turnleft a
+    curve(n - 1, d / 2, -a)
+  } else {
+    forward d
+  }
+}
+
+penup
+forward -390
+turnright 90
+forward 320
+turnleft 90
+pendown
+
+main(8, 780,  60)
+

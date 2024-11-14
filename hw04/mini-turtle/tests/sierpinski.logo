@@ -1,0 +1,38 @@
+(* Sierpinski triangle (Gabriel DORIATH DÖHLER) *)
+
+def sierpinski(n, d) {
+  if n {
+    sierpinski(n - 1, d / 2)
+    penup
+    forward d / 2
+    pendown
+
+    sierpinski(n - 1, d / 2)
+    penup
+    turnleft 120
+    forward d / 2
+    turnright 120
+    pendown
+
+    sierpinski(n - 1, d / 2)
+    penup
+    turnright 120
+    forward d / 2
+    turnleft 120
+    pendown
+  } else {
+    repeat 3 {
+      forward d
+      turnleft 120
+    }
+  }
+}
+
+penup
+forward -260
+turnright 90
+forward 200
+turnleft 90
+pendown
+sierpinski(6, 512)
+
