@@ -30,13 +30,37 @@ let rec check_expr var_table = function
   | Eunop (op, e) -> TEunop (op, check_expr var_table  e)
   | Ecall (id, args) -> (
     match id.id with
-    | "len" | "range" | "list" -> 
+    | "len" ->
+      if List.length args <> 1 then
+      error ~loc:id.loc "len expects 1 argument but got %d" (List.length args)
+      else
+      TEcall ({fn_name=id.id; fn_params=[]}, [check_expr var_table  (List.hd args)])
+    | "list" -> (
+      match args with
+      | [Ecall(id2,args2)] when id2.id = "range"->(
+        match args2 with
+        | [ Ecst e ] -> (
+                  match e with
+                  | Cint n ->
+                    let rec gen_list i =
+                      match i with
+                      | -1L -> []
+                      | _ -> gen_list (Int64.sub i 1L) @ [TEcst(Cint i)] in
+                    TElist(gen_list (Int64.sub n 1L))
+                  | _ -> error ~loc:id2.loc "(typing) range takes 'int' argument")
+        | [ e ] when List.length args2 = 1 -> TErange (check_expr var_table e)
+        | _ -> error ~loc:id2.loc "(typing) range expected exactly 1 argument(s), got %i" (List.length args2)
+      )
+      | _ ->error ~loc:id.loc "(typing) range expected exactly 1 argument(s), got %i" (List.length args))
+    |"range" -> 
       let targs = List.map (check_expr var_table ) args in
       TEcall ({fn_name=id.id; fn_params=[]}, targs)
     | _ ->
       if not (Hashtbl.mem function_table id.id) then
       error ~loc:id.loc "function %s is not defined" id.id
-    else
+      else if List.length args <> List.length (Hashtbl.find function_table id.id).fn_params then
+      error ~loc:id.loc "function %s expects %d arguments but got %d" id.id (List.length (Hashtbl.find function_table id.id).fn_params) (List.length args)
+      else
       let fn = Hashtbl.find function_table id.id in
       let targs = List.map (check_expr  var_table ) args in
       TEcall (fn, targs))
@@ -69,10 +93,14 @@ let rec check_def var_table def =
     let local_var = Hashtbl.create 16 in
     Hashtbl.iter (fun k v -> Hashtbl.add local_var k v) var_table;
     List.iter (fun arg -> Hashtbl.add local_var arg.id {v_name=arg.id; v_ofs=0}) args;
-    let fn_args = List.map (fun arg -> {v_name=arg.id; v_ofs=0}) args in
-    let fn = {fn_name = "def_"^id.id; fn_params = fn_args} in
-    Hashtbl.add function_table id.id fn;
-    (fn,check_stmt local_var stmt)
+    let duplicates = List.find_opt (fun id -> List.length (List.filter (fun p -> p.id = id.id) args) > 1) args in
+    match duplicates with
+    | Some dup -> error ~loc:dup.loc "(typing) duplicate argument '%s' in function definition" dup.id
+    | None ->
+      let fn_args = List.map (fun arg -> {v_name=arg.id; v_ofs=0}) args in
+      let fn = {fn_name = "def_"^id.id; fn_params = fn_args} in
+      Hashtbl.add function_table id.id fn;
+      (fn,check_stmt local_var stmt)
 
 (* 檢查所有 def *)
 let rec check_defs var_table defs =
