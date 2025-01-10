@@ -5,8 +5,6 @@ open Ast
 
 let debug = ref false
 
-let currnet_offset = ref 0
-
 (* let str_counter = ref 0
 let str_table = Hashtbl.create 1000 *)
 
@@ -29,25 +27,25 @@ let rec generate_expr = function
   | TEcst c ->
     (match c with
     |  Cnone -> 
-      movq (imm 2) (reg rdi)++
-      call "malloc"++
-      movq (imm 0) (ind ~ofs:(-8) rax)++
-      movq (imm 0) (ind ~ofs:(-16) rax)
+      movq (imm 16) (reg rdi)++
+      call "my_malloc"++
+      movq (imm 0) (ind ~ofs:(0) rax)++
+      movq (imm 0) (ind ~ofs:(8) rax)
     | Cbool b ->
-      movq (imm 2) (reg rdi)++
-      call "malloc"++
-      movq (imm 1) (ind ~ofs:(-8) rax)++
-      movq (imm (if b then 1 else 0)) (ind ~ofs:(-16) rax)
+      movq (imm 16) (reg rdi)++
+      call "my_malloc"++
+      movq (imm 1) (ind ~ofs:(0) rax)++
+      movq (imm (if b then 1 else 0)) (ind ~ofs:(8) rax)
     | Cint i -> 
-      movq (imm 2) (reg rdi)++
-      call "malloc"++
-      movq (imm 2) (ind ~ofs:(-8) rax)++
-      movq (imm64 i) (ind ~ofs:(-16) rax)
+      movq (imm 16) (reg rdi)++
+      call "my_malloc"++
+      movq (imm 2) (ind ~ofs:(0) rax)++
+      movq (imm64 i) (ind ~ofs:(8) rax)
     | Cstring s -> 
-      movq (imm (2+(String.length s)+1)) (reg rdi) ++
-      call "malloc"++
-      movq (imm 3) (ind ~ofs:(-8) rax) ++
-      movq (imm (String.length s)) (ind ~ofs:(-16) rax)
+      movq (imm ((2+(String.length s)+1)*16)) (reg rdi) ++
+      call "my_malloc"++
+      movq (imm 3) (ind ~ofs:(0) rax) ++
+      movq (imm (String.length s)) (ind ~ofs:(8) rax)
     )
   | TEvar var ->
     let offset = Hashtbl.find var_table var.v_name in
@@ -62,113 +60,113 @@ let rec generate_expr = function
       (movq (reg r13) (reg r14))++
       match op with
       | Badd -> 
-        movq (ind ~ofs:(-16) r14) (reg rax) ++
-        addq (reg rax) (ind ~ofs:( -16) r15) ++
+        movq (ind ~ofs:(8) r14) (reg rax) ++
+        addq (reg rax) (ind ~ofs:( 8) r15) ++
         movq (reg r15) (reg rax)
       | Bsub -> 
-        movq (ind ~ofs:(-16) r14) (reg rax) ++
-        subq (reg rax) (ind ~ofs:( -16) r15) ++
+        movq (ind ~ofs:(8) r14) (reg rax) ++
+        subq (reg rax) (ind ~ofs:( 8) r15) ++
         movq (reg r15) (reg rax)
       | Bmul -> 
-        movq (ind ~ofs:(-16) r14) (reg rax) ++
-        imulq (ind ~ofs:(-16) r15) (reg rax) ++
-        movq (reg rax) (ind ~ofs:(-16) r15) ++
+        movq (ind ~ofs:(8) r14) (reg rax) ++
+        imulq (ind ~ofs:(8) r15) (reg rax) ++
+        movq (reg rax) (ind ~ofs:(8) r15) ++
         movq (reg r15) (reg rax)
       | Bdiv ->
-        movq (ind ~ofs:(-16) r15) (reg rax) ++
+        movq (ind ~ofs:(8) r15) (reg rax) ++
         cqto ++
-        idivq (ind ~ofs:(-16) r14) ++
-        movq (reg rax) (ind ~ofs:(-16) r15) ++
+        idivq (ind ~ofs:(8) r14) ++
+        movq (reg rax) (ind ~ofs:(8) r15) ++
         movq (reg r15) (reg rax)
       | Bmod ->
-        movq (ind ~ofs:(-16) r15) (reg rax) ++
+        movq (ind ~ofs:(8) r15) (reg rax) ++
         cqto ++
-        idivq (ind ~ofs:(-16) r14) ++
-        movq (reg rdx) (ind ~ofs:(-16) r15) ++
+        idivq (ind ~ofs:(8) r14) ++
+        movq (reg rdx) (ind ~ofs:(8) r15) ++
         movq (reg r15) (reg rax)
       | Beq ->
-        movq (ind ~ofs:(-16) r15) (reg rax) ++
-        cmpq (reg rax)(ind ~ofs:(-16) r14) ++
+        movq (ind ~ofs:(8) r15) (reg rax) ++
+        cmpq (reg rax)(ind ~ofs:(8) r14) ++
         sete (reg al) ++
         movzbq (reg al) rax ++
-        movq (reg rax) (ind ~ofs:(-16) r15)++
-        movq (imm 2) (reg rdi)++
-        call "malloc"++
-        movq (imm 1) (ind ~ofs:(-8) rax)++
-        movq (ind ~ofs:(-16) r15) (reg rbx)++
-        movq (reg rbx) (ind ~ofs:(-16) rax)
+        movq (reg rax) (ind ~ofs:(8) r15)++
+        movq (imm 16) (reg rdi)++
+        call "my_malloc"++
+        movq (imm 1) (ind ~ofs:(0) rax)++
+        movq (ind ~ofs:(8) r15) (reg rbx)++
+        movq (reg rbx) (ind ~ofs:(8) rax)
       | Bneq ->
-        movq (ind ~ofs:(-16) r15) (reg rax) ++
-        cmpq (reg rax)(ind ~ofs:(-16) r14) ++
+        movq (ind ~ofs:(8) r15) (reg rax) ++
+        cmpq (reg rax)(ind ~ofs:(8) r14) ++
         setne (reg al) ++
         movzbq (reg al) rax ++
-        movq (reg rax) (ind ~ofs:(-16) r15)++
-        movq (imm 2) (reg rdi)++
-        call "malloc"++
-        movq (imm 1) (ind ~ofs:(-8) rax)++
-        movq (ind ~ofs:(-16) r15) (reg rbx)++
-        movq (reg rbx) (ind ~ofs:(-16) rax)
+        movq (reg rax) (ind ~ofs:(8) r15)++
+        movq (imm 16) (reg rdi)++
+        call "my_malloc"++
+        movq (imm 1) (ind ~ofs:(0) rax)++
+        movq (ind ~ofs:(8) r15) (reg rbx)++
+        movq (reg rbx) (ind ~ofs:(8) rax)
       | Blt ->
-        movq (ind ~ofs:(-16) r15) (reg rax) ++
-        cmpq (reg rax)(ind ~ofs:(-16) r14) ++
+        movq (ind ~ofs:(8) r15) (reg rax) ++
+        cmpq (reg rax)(ind ~ofs:(8) r14) ++
         setg (reg al) ++
         movzbq (reg al) rax ++
-        movq (reg rax) (ind ~ofs:(-16) r15)++
-        movq (imm 2) (reg rdi)++
-        call "malloc"++
-        movq (imm 1) (ind ~ofs:(-8) rax)++
-        movq (ind ~ofs:(-16) r15) (reg rbx)++
-        movq (reg rbx) (ind ~ofs:(-16) rax)
+        movq (reg rax) (ind ~ofs:(8) r15)++
+        movq (imm 16) (reg rdi)++
+        call "my_malloc"++
+        movq (imm 1) (ind ~ofs:(0) rax)++
+        movq (ind ~ofs:(8) r15) (reg rbx)++
+        movq (reg rbx) (ind ~ofs:(8) rax)
       | Ble ->
-        movq (ind ~ofs:(-16) r15) (reg rax) ++
-        cmpq (reg rax)(ind ~ofs:(-16) r14) ++
+        movq (ind ~ofs:(8) r15) (reg rax) ++
+        cmpq (reg rax)(ind ~ofs:(8) r14) ++
         setge (reg al) ++
         movzbq (reg al) rax ++
-        movq (reg rax) (ind ~ofs:(-16) r15)++
-        movq (imm 2) (reg rdi)++
-        call "malloc"++
-        movq (imm 1) (ind ~ofs:(-8) rax)++
-        movq (ind ~ofs:(-16) r15) (reg rbx)++
-        movq (reg rbx) (ind ~ofs:(-16) rax)
+        movq (reg rax) (ind ~ofs:(8) r15)++
+        movq (imm 16) (reg rdi)++
+        call "my_malloc"++
+        movq (imm 1) (ind ~ofs:(0) rax)++
+        movq (ind ~ofs:(8) r15) (reg rbx)++
+        movq (reg rbx) (ind ~ofs:(8) rax)
       | Bgt ->
-        movq (ind ~ofs:(-16) r15) (reg rax) ++
-        cmpq (reg rax)(ind ~ofs:(-16) r14) ++
+        movq (ind ~ofs:(8) r15) (reg rax) ++
+        cmpq (reg rax)(ind ~ofs:(8) r14) ++
         setl (reg al) ++
         movzbq (reg al) rax ++
-        movq (reg rax) (ind ~ofs:(-16) r15)++
-        movq (imm 2) (reg rdi)++
-        call "malloc"++
-        movq (imm 1) (ind ~ofs:(-8) rax)++
-        movq (ind ~ofs:(-16) r15) (reg rbx)++
-        movq (reg rbx) (ind ~ofs:(-16) rax)
+        movq (reg rax) (ind ~ofs:(8) r15)++
+        movq (imm 16) (reg rdi)++
+        call "my_malloc"++
+        movq (imm 1) (ind ~ofs:(0) rax)++
+        movq (ind ~ofs:(8) r15) (reg rbx)++
+        movq (reg rbx) (ind ~ofs:(8) rax)
       | Bge ->
-        movq (ind ~ofs:(-16) r15) (reg rax) ++
-        cmpq (reg rax)(ind ~ofs:(-16) r14) ++
+        movq (ind ~ofs:(8) r15) (reg rax) ++
+        cmpq (reg rax)(ind ~ofs:(8) r14) ++
         setle (reg al) ++
         movzbq (reg al) rax ++
-        movq (reg rax) (ind ~ofs:(-16) r15)++
-        movq (imm 2) (reg rdi)++
-        call "malloc"++
-        movq (imm 1) (ind ~ofs:(-8) rax)++
-        movq (ind ~ofs:(-16) r15) (reg rbx)++
-        movq (reg rbx) (ind ~ofs:(-16) rax)
+        movq (reg rax) (ind ~ofs:(8) r15)++
+        movq (imm 16) (reg rdi)++
+        call "my_malloc"++
+        movq (imm 1) (ind ~ofs:(0) rax)++
+        movq (ind ~ofs:(8) r15) (reg rbx)++
+        movq (reg rbx) (ind ~ofs:(8) rax)
       |Band->
-        movq (ind ~ofs:(-16) r14) (reg rax) ++
-        andq (reg rax) (ind ~ofs:( -16) r15) ++
+        movq (ind ~ofs:(8) r14) (reg rax) ++
+        andq (reg rax) (ind ~ofs:(8) r15) ++
         movq (reg r15) (reg rax)
       | Bor->
-        movq (ind ~ofs:(-16) r14) (reg rax) ++
-        orq (reg rax) (ind ~ofs:( -16) r15) ++
+        movq (ind ~ofs:(8) r14) (reg rax) ++
+        orq (reg rax) (ind ~ofs:(8) r15) ++
         movq (reg r15) (reg rax))
   | TEunop (op,expr)->
     let e = generate_expr expr in
     e++
     (match op with
     | Uneg ->
-      negq (ind ~ofs:(-16) rax)
+      negq (ind ~ofs:(8) rax)
     | Unot ->
-      notq (ind ~ofs:(-16) rax)++
-      andq (imm 1) (ind ~ofs:(-16) rax))
+      notq (ind ~ofs:(8) rax)++
+      andq (imm 1) (ind ~ofs:(8) rax))
   | TEcall (fn,exprs)->
     call fn.fn_name
   | _ -> nop
@@ -183,8 +181,8 @@ let print =
   pushq (reg rbp) ++
   movq (reg rsp) (reg rbp) ++
   movq (reg rdi) (reg rbx) ++
-  movq (ind ~ofs:(-8) rbx) (reg rax) ++
-  movq (ind ~ofs:(-16) rbx) (reg rsi) ++
+  movq (ind ~ofs:(0) rbx) (reg rax) ++
+  movq (ind ~ofs:(8) rbx) (reg rsi) ++
   cmpq (imm 2) (reg rax) ++
   jne label_int ++
   movq (lab "$format_int") (reg rdi) ++
@@ -193,8 +191,8 @@ let print =
   jmp label_print_end ++
   label label_int ++
 
-  movq (ind ~ofs:(-8) rbx) (reg rax) ++
-  movq (ind ~ofs:(-16) rbx) (reg rsi) ++
+  movq (ind ~ofs:(0) rbx) (reg rax) ++
+  movq (ind ~ofs:(8) rbx) (reg rsi) ++
   cmpq (imm 1) (reg rax) ++
   jne label_bool ++
   cmpq (imm 1) (reg rsi) ++
@@ -233,7 +231,7 @@ let rec generate_stmt stmt =
     let else_label = Printf.sprintf "else_%d" (get_label_counter()) in
     let end_label = Printf.sprintf "end_%d" (get_label_counter()) in
     e++
-    cmpq (imm 0) (ind ~ofs:(-16) rax)  ++
+    cmpq (imm 0) (ind ~ofs:(8) rax)  ++
     je else_label ++
     label then_label ++
     (generate_stmt stmt1) ++
@@ -274,11 +272,16 @@ let generate_def def =
   let f,stmt = def in
   let label = label f.fn_name in
   let prologue = pushq (reg rbp) ++ movq (reg rsp) (reg rbp) in
-  let epilogue = popq rbp ++
-  movq (imm 2) (reg rdi)++
-  call "malloc"++
-  movq (imm 0) (ind ~ofs:(-8) rax) ++
-  movq (imm 0) (ind ~ofs:(-16) rax) ++
+  let epilogue = movq (imm 16) (reg rdi)++
+  call "my_malloc"++
+  movq (imm 0) (ind ~ofs:(0) rax) ++
+  movq (imm 0) (ind ~ofs:(8) rax) ++
+  movq (reg rbp)  (reg rsp) ++ 
+  popq rbp ++
+  (if f.fn_name = "main" then
+    movq (imm 0) (reg rax)
+  else
+    nop)++
   ret in
   let body = generate_stmt stmt in
   label ++ prologue ++ body ++ epilogue
@@ -304,11 +307,10 @@ let generate_data_section =
     space 80000
   
 let my_malloc =
-  currnet_offset := !currnet_offset+16;
   label "my_malloc" ++
   pushq (reg rbp) ++
   movq (reg rsp) (reg rbp) ++
-  andq (imm (-8)) (reg rsp) ++
+  andq (imm (-16)) (reg rsp) ++
   call "malloc" ++
   movq (reg rbp) (reg rsp) ++
   popq rbp ++
