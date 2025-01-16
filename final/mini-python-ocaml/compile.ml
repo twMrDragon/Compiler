@@ -8,9 +8,10 @@ let debug = ref false
 (* let str_counter = ref 0
 let str_table = Hashtbl.create 1000 *)
 
+let str_table = Hashtbl.create 16
 let label_counter = ref 0
 
-let var_table = Hashtbl.create 1000
+let var_table = Hashtbl.create 16
 let var_counter = ref 0
 
 let get_var_counter()=
@@ -23,10 +24,23 @@ let get_label_counter() =
   label_counter := !label_counter + 1;
   c
 
+let generate_str s =
+  if not (Hashtbl.mem str_table s) then
+    let current_count = get_label_counter() in
+    let label = Printf.sprintf "str_%d" current_count in
+    Hashtbl.add str_table s label;
+  else
+    ();
+  movq (reg rax) (reg rbx) ++  
+  leaq (ind ~ofs:(16) rax) (rdi) ++
+  movq (lab ("$"^(Hashtbl.find str_table s))) (reg rsi) ++
+  call "my_strcpy"++
+  movq (reg rbx) (reg rax)
+
 let rec generate_expr = function
   | TEcst c ->
     (match c with
-    |  Cnone -> 
+    |  Cnone ->
       movq (imm 16) (reg rdi)++
       call "my_malloc"++
       movq (imm 0) (ind ~ofs:(0) rax)++
@@ -42,27 +56,28 @@ let rec generate_expr = function
       movq (imm 2) (ind ~ofs:(0) rax)++
       movq (imm64 i) (ind ~ofs:(8) rax)
     | Cstring s -> 
-      movq (imm ((2+(String.length s)+1)*16)) (reg rdi) ++
+      movq (imm (16+((String.length s)+1))) (reg rdi) ++
       call "my_malloc"++
       movq (imm 3) (ind ~ofs:(0) rax) ++
-      movq (imm (String.length s)) (ind ~ofs:(8) rax)
+      movq (imm (String.length s)) (ind ~ofs:(8) rax) ++
+      generate_str s
     )
   | TEvar var ->
     let offset = Hashtbl.find var_table var.v_name in
     movq (lab "$my_array") (reg rbx) ++
     movq (ind ~ofs:(offset) rbx) (reg rax)
   | TEbinop (op, expr1, expr2) -> (
-      let e1 = generate_expr expr1 ++ movq (reg rax)(reg r14) in
-      let e2 = generate_expr expr2 ++ movq (reg rax) (reg r15) in
+      let e1 = generate_expr expr1 ++ movq (reg rax)(reg r15) in
+      let e2 = generate_expr expr2 ++ movq (reg rax) (reg r14) in
       e1++e2++
-      (movq (reg r15) (reg r13))++
-      (movq (reg r14) (reg r15))++
-      (movq (reg r13) (reg r14))++
       match op with
-      | Badd -> 
+      | Badd ->
+        (* int add *)
+        
         movq (ind ~ofs:(8) r14) (reg rax) ++
         addq (reg rax) (ind ~ofs:( 8) r15) ++
         movq (reg r15) (reg rax)
+        (* str add *)
       | Bsub -> 
         movq (ind ~ofs:(8) r14) (reg rax) ++
         subq (reg rax) (ind ~ofs:( 8) r15) ++
@@ -89,66 +104,54 @@ let rec generate_expr = function
         cmpq (reg rax)(ind ~ofs:(8) r14) ++
         sete (reg al) ++
         movzbq (reg al) rax ++
-        movq (reg rax) (ind ~ofs:(8) r15)++
-        movq (imm 16) (reg rdi)++
-        call "my_malloc"++
-        movq (imm 1) (ind ~ofs:(0) rax)++
-        movq (ind ~ofs:(8) r15) (reg rbx)++
+        movq (reg rax) (reg rbx)++
+        (generate_expr (TEcst (Cbool true)))++
+        (* generate true to rax *)
         movq (reg rbx) (ind ~ofs:(8) rax)
       | Bneq ->
         movq (ind ~ofs:(8) r15) (reg rax) ++
         cmpq (reg rax)(ind ~ofs:(8) r14) ++
         setne (reg al) ++
         movzbq (reg al) rax ++
-        movq (reg rax) (ind ~ofs:(8) r15)++
-        movq (imm 16) (reg rdi)++
-        call "my_malloc"++
-        movq (imm 1) (ind ~ofs:(0) rax)++
-        movq (ind ~ofs:(8) r15) (reg rbx)++
+        movq (reg rax) (reg rbx)++
+        (generate_expr (TEcst (Cbool true)))++
+        (* generate true to rax *)
         movq (reg rbx) (ind ~ofs:(8) rax)
       | Blt ->
         movq (ind ~ofs:(8) r15) (reg rax) ++
         cmpq (reg rax)(ind ~ofs:(8) r14) ++
         setg (reg al) ++
         movzbq (reg al) rax ++
-        movq (reg rax) (ind ~ofs:(8) r15)++
-        movq (imm 16) (reg rdi)++
-        call "my_malloc"++
-        movq (imm 1) (ind ~ofs:(0) rax)++
-        movq (ind ~ofs:(8) r15) (reg rbx)++
+        movq (reg rax) (reg rbx)++
+        (generate_expr (TEcst (Cbool true)))++
+        (* generate true to rax *)
         movq (reg rbx) (ind ~ofs:(8) rax)
       | Ble ->
         movq (ind ~ofs:(8) r15) (reg rax) ++
         cmpq (reg rax)(ind ~ofs:(8) r14) ++
         setge (reg al) ++
         movzbq (reg al) rax ++
-        movq (reg rax) (ind ~ofs:(8) r15)++
-        movq (imm 16) (reg rdi)++
-        call "my_malloc"++
-        movq (imm 1) (ind ~ofs:(0) rax)++
-        movq (ind ~ofs:(8) r15) (reg rbx)++
+        movq (reg rax) (reg rbx)++
+        (generate_expr (TEcst (Cbool true)))++
+        (* generate true to rax *)
         movq (reg rbx) (ind ~ofs:(8) rax)
       | Bgt ->
         movq (ind ~ofs:(8) r15) (reg rax) ++
         cmpq (reg rax)(ind ~ofs:(8) r14) ++
         setl (reg al) ++
         movzbq (reg al) rax ++
-        movq (reg rax) (ind ~ofs:(8) r15)++
-        movq (imm 16) (reg rdi)++
-        call "my_malloc"++
-        movq (imm 1) (ind ~ofs:(0) rax)++
-        movq (ind ~ofs:(8) r15) (reg rbx)++
+        movq (reg rax) (reg rbx)++
+        (generate_expr (TEcst (Cbool true)))++
+        (* generate true to rax *)
         movq (reg rbx) (ind ~ofs:(8) rax)
       | Bge ->
         movq (ind ~ofs:(8) r15) (reg rax) ++
         cmpq (reg rax)(ind ~ofs:(8) r14) ++
         setle (reg al) ++
         movzbq (reg al) rax ++
-        movq (reg rax) (ind ~ofs:(8) r15)++
-        movq (imm 16) (reg rdi)++
-        call "my_malloc"++
-        movq (imm 1) (ind ~ofs:(0) rax)++
-        movq (ind ~ofs:(8) r15) (reg rbx)++
+        movq (reg rax) (reg rbx)++
+        (generate_expr (TEcst (Cbool true)))++
+        (* generate true to rax *)
         movq (reg rbx) (ind ~ofs:(8) rax)
       |Band->
         movq (ind ~ofs:(8) r14) (reg rax) ++
@@ -168,30 +171,38 @@ let rec generate_expr = function
       notq (ind ~ofs:(8) rax)++
       andq (imm 1) (ind ~ofs:(8) rax))
   | TEcall (fn,exprs)->
-    call fn.fn_name
+    (match fn.fn_name with
+    | "len" ->(
+      let first = List.hd exprs in 
+      (generate_expr first) ++
+      movq (ind ~ofs:(8) rax) (reg rbx)++
+      (generate_expr (TEcst (Cint 0L))) ++
+      movq (reg rbx) (ind ~ofs:(8) rax)
+      )
+    | _ ->call fn.fn_name)
   | _ -> nop
 
-let print =
-  let label_int = Printf.sprintf "print_int_%d" (get_label_counter()) in
-  let label_bool = Printf.sprintf "print_bool_%d" (get_label_counter()) in
-  let label_false = Printf.sprintf "print_false_%d" (get_label_counter()) in
-  let label_None = Printf.sprintf "print_none_%d" (get_label_counter()) in
+let my_print =
+  let label_int = Printf.sprintf "print_int_end_%d" (get_label_counter()) in
+  let label_bool = Printf.sprintf "print_bool_end_%d" (get_label_counter()) in
+  let label_false = Printf.sprintf "print_false_end_%d" (get_label_counter()) in
+  let label_None = Printf.sprintf "print_none_end_%d" (get_label_counter()) in
+  let label_str = Printf.sprintf "print_str_end_%d" (get_label_counter()) in
   let label_print_end = Printf.sprintf "print_end_%d" (get_label_counter()) in
-  label "print" ++
+  label "my_print" ++
   pushq (reg rbp) ++
   movq (reg rsp) (reg rbp) ++
   movq (reg rdi) (reg rbx) ++
   movq (ind ~ofs:(0) rbx) (reg rax) ++
-  movq (ind ~ofs:(8) rbx) (reg rsi) ++
   cmpq (imm 2) (reg rax) ++
   jne label_int ++
+  movq (ind ~ofs:(8) rbx) (reg rsi) ++
   movq (lab "$format_int") (reg rdi) ++
   movq (imm 0) (reg rax) ++
   call "printf" ++
   jmp label_print_end ++
   label label_int ++
 
-  movq (ind ~ofs:(0) rbx) (reg rax) ++
   movq (ind ~ofs:(8) rbx) (reg rsi) ++
   cmpq (imm 1) (reg rax) ++
   jne label_bool ++
@@ -215,6 +226,15 @@ let print =
   call "printf" ++
   jmp label_print_end ++
   label label_None ++
+
+  cmpq (imm 3) (reg rax) ++
+  jne label_str ++
+  movq (lab "$format_string") (reg rdi) ++
+  leaq (ind ~ofs:(16) rbx) (rsi) ++
+  movq (imm 0) (reg rax) ++
+  call "printf" ++
+  jmp label_print_end ++
+  label label_str++
   
   label label_print_end ++
   movq (reg rbp) (reg rsp)++
@@ -260,7 +280,7 @@ let rec generate_stmt stmt =
   | TSprint expr->
   generate_expr expr ++
   movq (reg rax) (reg rdi) ++
-  call "print"
+  call "my_print"
   | TSblock stmts ->
     List.fold_left (fun acc stmt -> acc ++ (generate_stmt stmt)) nop stmts
   | TSfor (id,expr,stmt) -> nop
@@ -272,10 +292,7 @@ let generate_def def =
   let f,stmt = def in
   let label = label f.fn_name in
   let prologue = pushq (reg rbp) ++ movq (reg rsp) (reg rbp) in
-  let epilogue = movq (imm 16) (reg rdi)++
-  call "my_malloc"++
-  movq (imm 0) (ind ~ofs:(0) rax) ++
-  movq (imm 0) (ind ~ofs:(8) rax) ++
+  let epilogue = (generate_expr (TEcst Cnone))++
   movq (reg rbp)  (reg rsp) ++ 
   popq rbp ++
   (if f.fn_name = "main" then
@@ -292,7 +309,7 @@ let rec generate_text_section = function
     let f,stmt = def in
     (generate_def def) ++ (generate_text_section tl)
 
-let generate_data_section =
+let generate_data_section table =
     label "format_int" ++
     string "%d\n" ++
     label "format_string" ++
@@ -304,8 +321,10 @@ let generate_data_section =
     label "None" ++
     string  "None\n" ++
     label "my_array" ++
-    space 80000
-  
+    space 80000 ++ 
+    Hashtbl.fold (fun key value acc ->
+      acc ++ label value ++ string key) str_table nop
+
 let my_malloc =
   label "my_malloc" ++
   pushq (reg rbp) ++
@@ -316,8 +335,24 @@ let my_malloc =
   popq rbp ++
   ret
 
+let my_strcpy =
+  label "my_strcpy" ++
+  pushq (reg rbp) ++
+  movq (reg rsp) (reg rbp) ++
+  andq (imm (-16)) (reg rsp) ++
+  call "strcpy" ++
+  movq (reg rbp) (reg rsp) ++
+  popq rbp ++
+  ret
+
+let util_function = 
+  my_malloc ++
+  my_print ++
+  my_strcpy
+
 let file ?debug:(b=false) (p: Ast.tfile) : X86_64.program =
   debug := b;
   let text = generate_text_section p in
-  { text = globl "main" ++  text ++ my_malloc ++ print;   (* TODO *)
-    data = generate_data_section; }                                 (* TODO *)
+  let data = generate_data_section str_table in
+  { text = globl "main" ++  text ++ util_function;   (* TODO *)
+    data = data; }                                 (* TODO *)
