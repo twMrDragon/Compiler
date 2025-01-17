@@ -25,8 +25,12 @@ let rec check_expr var_table = function
       TEvar({v_name = id.id; v_ofs=0})
     else
       error ~loc:id.loc "variable %s is not defined" id.id
-  | Ebinop (op, e1, e2) -> 
-    TEbinop (op, check_expr var_table e1, check_expr var_table  e2)
+  | Ebinop (op, e1, e2) ->(
+    let e1' = check_expr var_table e1 in
+    let e2' = check_expr var_table e2 in
+    match (e1', e2') with 
+      | _,_ -> TEbinop (op, e1', e2')
+  )
   | Eunop (op, e) -> TEunop (op, check_expr var_table  e)
   | Ecall (id, args) -> (
     match id.id with
