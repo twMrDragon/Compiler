@@ -7,9 +7,9 @@ let debug = ref false
 (* let str_counter = ref 0
 let str_table = Hashtbl.create 1000 *)
 
-let str_table = Hashtbl.create 16
+let global_str_table = Hashtbl.create 16
 let label_counter = ref 0
-let var_table = Hashtbl.create 16
+let global_var_table = Hashtbl.create 16
 let var_counter = ref 0
 
 let get_var_counter () =
@@ -22,19 +22,19 @@ let get_label_counter () =
   label_counter := !label_counter + 1;
   c
 
-let generate_str s =
+let generate_str str_table s =
   if not (Hashtbl.mem str_table s) then
     let current_count = get_label_counter () in
     let label = Printf.sprintf "str_%d" current_count in
     Hashtbl.add str_table s label
   else ();
-  movq (reg rax) (reg rbx)
+  pushq (reg rax)
+  ++ pushq (imm 0)
   ++ leaq (ind ~ofs:16 rax) rdi
   ++ movq (lab ("$" ^ Hashtbl.find str_table s)) (reg rsi)
-  ++ call "my_strcpy"
-  ++ movq (reg rbx) (reg rax)
+  ++ call "my_strcpy" ++ popq rax ++ popq rax
 
-let rec generate_expr = function
+let rec generate_expr var_table str_table = function
   | TEcst c -> (
       match c with
       | Cnone ->
@@ -57,14 +57,14 @@ let rec generate_expr = function
           ++ call "my_malloc"
           ++ movq (imm 3) (ind ~ofs:0 rax)
           ++ movq (imm (String.length s)) (ind ~ofs:8 rax)
-          ++ generate_str s)
+          ++ generate_str str_table s)
   | TEvar var ->
       let offset = Hashtbl.find var_table var.v_name in
       movq (lab "$my_array") (reg rbx) ++ movq (ind ~ofs:offset rbx) (reg rax)
   | TEbinop (op, expr1, expr2) -> (
-      generate_expr expr1
+      generate_expr var_table str_table expr1
       ++ pushq (reg rax)
-      ++ generate_expr expr2
+      ++ generate_expr var_table str_table expr2
       ++ pushq (reg rax)
       ++
       match op with
@@ -78,7 +78,7 @@ let rec generate_expr = function
           in
           cmpq (imm 3) (ind ~ofs:0 rax)
           ++ je label_str_add
-          ++ generate_expr (TEcst (Cint 0L))
+          ++ generate_expr var_table str_table (TEcst (Cint 0L))
           ++ popq r14 ++ popq r15
           ++ movq (ind ~ofs:8 r15) (reg rbx)
           ++ addq (ind ~ofs:8 r14) (reg rbx)
@@ -112,19 +112,19 @@ let rec generate_expr = function
           ++ call "my_strcat" ++ popq rax ++ popq rax ++ popq r14 ++ popq r15
           ++ label label_add_end
       | Bsub ->
-          generate_expr (TEcst (Cint 0L))
+          generate_expr var_table str_table (TEcst (Cint 0L))
           ++ popq r14 ++ popq r15
           ++ movq (ind ~ofs:8 r15) (reg rbx)
           ++ subq (ind ~ofs:8 r14) (reg rbx)
           ++ movq (reg rbx) (ind ~ofs:8 rax)
       | Bmul ->
-          generate_expr (TEcst (Cint 0L))
+          generate_expr var_table str_table (TEcst (Cint 0L))
           ++ popq r14 ++ popq r15
           ++ movq (ind ~ofs:8 r15) (reg rbx)
           ++ imulq (ind ~ofs:8 r14) (reg rbx)
           ++ movq (reg rbx) (ind ~ofs:8 rax)
       | Bdiv ->
-          generate_expr (TEcst (Cint 0L))
+          generate_expr var_table str_table (TEcst (Cint 0L))
           ++ movq (reg rax) (reg rcx)
           ++ popq r14 ++ popq r15
           ++ movq (ind ~ofs:8 r15) (reg rax)
@@ -134,7 +134,7 @@ let rec generate_expr = function
           ++ movq (reg rcx) (reg rax)
           ++ movq (reg rbx) (ind ~ofs:8 rax)
       | Bmod ->
-          generate_expr (TEcst (Cint 0L))
+          generate_expr var_table str_table (TEcst (Cint 0L))
           ++ movq (reg rax) (reg rcx)
           ++ popq r14 ++ popq r15
           ++ movq (ind ~ofs:8 r15) (reg rax)
@@ -144,7 +144,7 @@ let rec generate_expr = function
           ++ movq (reg rcx) (reg rax)
           ++ movq (reg rbx) (ind ~ofs:8 rax)
       | Beq ->
-          generate_expr (TEcst (Cbool true))
+          generate_expr var_table str_table (TEcst (Cbool true))
           ++ movq (reg rax) (reg rcx)
           ++ popq r14 ++ popq r15
           ++ movq (ind ~ofs:8 r15) (reg rax)
@@ -155,7 +155,7 @@ let rec generate_expr = function
           ++ movq (reg rcx) (reg rax)
           ++ movq (reg rbx) (ind ~ofs:8 rax)
       | Bneq ->
-          generate_expr (TEcst (Cbool true))
+          generate_expr var_table str_table (TEcst (Cbool true))
           ++ movq (reg rax) (reg rcx)
           ++ popq r14 ++ popq r15
           ++ movq (ind ~ofs:8 r15) (reg rax)
@@ -166,7 +166,7 @@ let rec generate_expr = function
           ++ movq (reg rcx) (reg rax)
           ++ movq (reg rbx) (ind ~ofs:8 rax)
       | Blt ->
-          generate_expr (TEcst (Cbool true))
+          generate_expr var_table str_table (TEcst (Cbool true))
           ++ movq (reg rax) (reg rcx)
           ++ popq r14 ++ popq r15
           ++ movq (ind ~ofs:8 r15) (reg rax)
@@ -177,7 +177,7 @@ let rec generate_expr = function
           ++ movq (reg rcx) (reg rax)
           ++ movq (reg rbx) (ind ~ofs:8 rax)
       | Ble ->
-          generate_expr (TEcst (Cbool true))
+          generate_expr var_table str_table (TEcst (Cbool true))
           ++ movq (reg rax) (reg rcx)
           ++ popq r14 ++ popq r15
           ++ movq (ind ~ofs:8 r15) (reg rax)
@@ -188,7 +188,7 @@ let rec generate_expr = function
           ++ movq (reg rcx) (reg rax)
           ++ movq (reg rbx) (ind ~ofs:8 rax)
       | Bgt ->
-          generate_expr (TEcst (Cbool true))
+          generate_expr var_table str_table (TEcst (Cbool true))
           ++ movq (reg rax) (reg rcx)
           ++ popq r14 ++ popq r15
           ++ movq (ind ~ofs:8 r15) (reg rax)
@@ -199,7 +199,7 @@ let rec generate_expr = function
           ++ movq (reg rcx) (reg rax)
           ++ movq (reg rbx) (ind ~ofs:8 rax)
       | Bge ->
-          generate_expr (TEcst (Cbool true))
+          generate_expr var_table str_table (TEcst (Cbool true))
           ++ movq (reg rax) (reg rcx)
           ++ popq r14 ++ popq r15
           ++ movq (ind ~ofs:8 r15) (reg rax)
@@ -210,20 +210,19 @@ let rec generate_expr = function
           ++ movq (reg rcx) (reg rax)
           ++ movq (reg rbx) (ind ~ofs:8 rax)
       | Band ->
-          generate_expr (TEcst (Cbool true))
+          generate_expr var_table str_table (TEcst (Cbool true))
           ++ popq r14 ++ popq r15
           ++ movq (ind ~ofs:8 r14) (reg rbx)
           ++ andq (ind ~ofs:8 r15) (reg rbx)
           ++ movq (reg rbx) (ind ~ofs:8 rax)
       | Bor ->
-          generate_expr (TEcst (Cbool true))
+          generate_expr var_table str_table (TEcst (Cbool true))
           ++ popq r14 ++ popq r15
           ++ movq (ind ~ofs:8 r14) (reg rbx)
           ++ orq (ind ~ofs:8 r15) (reg rbx)
           ++ movq (reg rbx) (ind ~ofs:8 rax))
   | TEunop (op, expr) -> (
-      let e = generate_expr expr in
-      e
+      generate_expr var_table str_table expr
       ++
       match op with
       | Uneg -> negq (ind ~ofs:8 rax)
@@ -232,11 +231,41 @@ let rec generate_expr = function
       match fn.fn_name with
       | "len" ->
           let first = List.hd exprs in
-          generate_expr first
+          generate_expr var_table str_table first
           ++ movq (ind ~ofs:8 rax) (reg rbx)
-          ++ generate_expr (TEcst (Cint 0L))
+          ++ generate_expr var_table str_table (TEcst (Cint 0L))
           ++ movq (reg rbx) (ind ~ofs:8 rax)
-      | _ -> call fn.fn_name)
+      | _ ->
+          let paired_list = List.combine fn.fn_params exprs in
+          let get_offset table name =
+            if Hashtbl.mem table name then Hashtbl.find table name
+            else
+              let offset = get_var_counter () * 8 in
+              Hashtbl.add table name offset;
+              offset
+          in
+          List.fold_left
+            (fun acc (var, expr) ->
+              (* copy from TSassign *)
+              let e = generate_expr var_table str_table expr in
+              let offset = get_offset var_table var.v_name in
+              acc
+              ++ movq (lab "$my_array") (reg rbx)
+              ++ pushq (ind ~ofs:offset rbx)
+              ++ pushq (imm 0)
+              ++ e
+              ++ movq (lab "$my_array") (reg rbx)
+              ++ movq (reg rax) (ind ~ofs:offset rbx))
+            nop paired_list
+          ++ call fn.fn_name
+          ++ List.fold_left
+               (fun acc var ->
+                 let offset = get_offset var_table var.v_name in
+                 acc
+                 ++ movq (lab "$my_array") (reg rbx)
+                 ++ popq rcx ++ popq rcx
+                 ++ movq (reg rcx) (ind ~ofs:offset rbx))
+               nop fn.fn_params)
   | TElist exprs ->
       movq (imm (16 + (List.length exprs * 8))) (reg rdi)
       ++ call "my_malloc"
@@ -246,7 +275,9 @@ let rec generate_expr = function
       ++ (let s, i =
             List.fold_left
               (fun (stmt_acc, ind_acc) expr ->
-                ( stmt_acc ++ generate_expr expr ++ popq rbx
+                ( stmt_acc
+                  ++ generate_expr var_table str_table expr
+                  ++ popq rbx
                   ++ movq (reg rax) (ind ~ofs:ind_acc rbx)
                   ++ pushq (reg rbx),
                   ind_acc + 8 ))
@@ -255,9 +286,9 @@ let rec generate_expr = function
           s)
       ++ popq rax
   | TEget (e1, e2) ->
-      generate_expr e1
+      generate_expr var_table str_table e1
       ++ pushq (reg rax)
-      ++ generate_expr e2
+      ++ generate_expr var_table str_table e2
       ++ pushq (reg rax)
       ++ popq r14
       ++ movq (ind ~ofs:8 r14) (reg r14)
@@ -280,12 +311,14 @@ let my_print =
   ++ movq (reg rsp) (reg rbp)
   ++ movq (reg rdi) (reg rbx)
   ++ movq (ind ~ofs:0 rbx) (reg rax)
+  (* print None *)
   ++ cmpq (imm 0) (reg rax)
   ++ jne label_None
   ++ movq (lab "$None") (reg rdi)
   ++ movq (imm 0) (reg rax)
   ++ call "printf" ++ jmp label_print_end ++ label label_None
   ++ movq (ind ~ofs:8 rbx) (reg rsi)
+  (* print bool *)
   ++ cmpq (imm 1) (reg rax)
   ++ jne label_bool
   ++ cmpq (imm 1) (reg rsi)
@@ -296,18 +329,21 @@ let my_print =
   ++ movq (lab "$False") (reg rdi)
   ++ movq (imm 0) (reg rax)
   ++ call "printf" ++ jmp label_print_end ++ label label_bool
+  (* print int *)
   ++ cmpq (imm 2) (reg rax)
   ++ jne label_int
   ++ movq (ind ~ofs:8 rbx) (reg rsi)
   ++ movq (lab "$format_int") (reg rdi)
   ++ movq (imm 0) (reg rax)
   ++ call "printf" ++ jmp label_print_end ++ label label_int
+  (* print string *)
   ++ cmpq (imm 3) (reg rax)
   ++ jne label_str
   ++ movq (lab "$format_string") (reg rdi)
   ++ leaq (ind ~ofs:16 rbx) rsi
   ++ movq (imm 0) (reg rax)
   ++ call "printf" ++ jmp label_print_end ++ label label_str
+  (* print list *)
   ++ cmpq (imm 4) (reg rax)
   ++ jne label_list
   ++ pushq (reg rbx)
@@ -344,79 +380,81 @@ let my_print =
   ++ movq (imm 0) (reg rax)
   ++ ret
 
-let rec generate_stmt stmt =
-  match stmt with
+let rec generate_stmt var_table str_table = function
   | TSif (expr, stmt1, stmt2) ->
-      let e = generate_expr expr in
+      let e = generate_expr var_table str_table expr in
       let cond_label = Printf.sprintf "cond_%d" (get_label_counter ()) in
       let then_label = Printf.sprintf "then_%d" (get_label_counter ()) in
       let else_label = Printf.sprintf "else_%d" (get_label_counter ()) in
       let end_label = Printf.sprintf "end_%d" (get_label_counter ()) in
       e
       ++ cmpq (imm 0) (ind ~ofs:8 rax)
-      ++ je else_label ++ label then_label ++ generate_stmt stmt1
-      ++ jmp end_label ++ label else_label ++ generate_stmt stmt2
+      ++ je else_label ++ label then_label
+      ++ generate_stmt var_table str_table stmt1
+      ++ jmp end_label ++ label else_label
+      ++ generate_stmt var_table str_table stmt2
       ++ jmp end_label ++ label end_label
-  | TSreturn e -> generate_expr e ++ popq rbp ++ ret
-  | TSassign (id, expr) ->
-      let e = generate_expr expr in
+  | TSreturn e -> generate_expr var_table str_table e ++ popq rbp ++ ret
+  | TSassign (var, expr) ->
+      let e = generate_expr var_table str_table expr in
       let offset =
-        if Hashtbl.mem var_table id.v_name then Hashtbl.find var_table id.v_name
+        if Hashtbl.mem var_table var.v_name then
+          Hashtbl.find var_table var.v_name
         else
           let offset = get_var_counter () * 8 in
-          Hashtbl.add var_table id.v_name offset;
+          Hashtbl.add var_table var.v_name offset;
           offset
       in
       e
       ++ movq (lab "$my_array") (reg rbx)
       ++ movq (reg rax) (ind ~ofs:offset rbx)
   | TSprint expr ->
-      generate_expr expr
+      generate_expr var_table str_table expr
       ++ movq (reg rax) (reg rdi)
       ++ call "my_print"
       ++ movq (lab "$new_line") (reg rdi)
       ++ movq (imm 0) (reg rax)
       ++ call "printf"
   | TSblock stmts ->
-      List.fold_left (fun acc stmt -> acc ++ generate_stmt stmt) nop stmts
-  | TSfor (id, expr, stmt) -> nop
-  | TSeval e -> generate_expr e
+      List.fold_left
+        (fun acc stmt -> acc ++ generate_stmt var_table str_table stmt)
+        nop stmts
+  | TSfor (var, expr, stmt) -> nop
+  | TSeval e -> generate_expr var_table str_table e
   | TSset (e1, e2, e3) ->
-      generate_expr e1
+      generate_expr var_table str_table e1
       ++ pushq (reg rax)
-      ++ generate_expr e2
+      ++ generate_expr var_table str_table e2
       ++ pushq (reg rax)
-      ++ generate_expr e3
+      ++ generate_expr var_table str_table e3
       ++ pushq (reg rax)
-      ++
       (* align *)
-      pushq (imm 0)
+      ++ pushq (imm 0)
       ++ popq r13 ++ popq r13 ++ popq r14
       ++ movq (ind ~ofs:8 r14) (reg r14)
       ++ popq r15
       ++ movq (reg r13) (ind ~ofs:16 ~index:r14 ~scale:8 r15)
 
-let generate_def def =
+let generate_def var_table str_table def =
   let f, stmt = def in
-  let label = label f.fn_name in
-  let prologue = pushq (reg rbp) ++ movq (reg rsp) (reg rbp) in
-  let epilogue =
-    generate_expr (TEcst Cnone)
-    ++ movq (reg rbp) (reg rsp)
-    ++ popq rbp
-    ++ (if f.fn_name = "main" then movq (imm 0) (reg rax) else nop)
-    ++ ret
-  in
-  let body = generate_stmt stmt in
-  label ++ prologue ++ body ++ epilogue
+  label f.fn_name
+  ++ pushq (reg rbp)
+  ++ movq (reg rsp) (reg rbp)
+  ++ generate_stmt var_table str_table stmt
+  ++ generate_expr var_table str_table (TEcst Cnone)
+  ++ movq (reg rbp) (reg rsp)
+  ++ popq rbp
+  ++ (if f.fn_name = "main" then movq (imm 0) (reg rax) else nop)
+  ++ ret
 
-let rec generate_text_section = function
+let rec generate_text_section var_table str_table = function
   | [] -> nop
   | def :: tl ->
       let f, stmt = def in
-      generate_def def ++ generate_text_section tl
+      let e = generate_def var_table str_table def in
+      e ++ generate_text_section var_table str_table tl
 
-let generate_data_section table =
+let generate_data_section str_table =
   label "format_int" ++ string "%d" ++ label "format_string" ++ string "%s"
   ++ label "True" ++ string "True" ++ label "False" ++ string "False"
   ++ label "None" ++ string "None" ++ label "new_line" ++ string "\n"
@@ -458,8 +496,8 @@ let util_function = my_malloc ++ my_print ++ my_strcpy ++ my_strcat
 
 let file ?debug:(b = false) (p : Ast.tfile) : X86_64.program =
   debug := b;
-  let text = generate_text_section p in
-  let data = generate_data_section str_table in
+  let text = generate_text_section global_var_table global_str_table p in
+  let data = generate_data_section global_str_table in
   {
     text = globl "main" ++ text ++ util_function;
     (* TODO *)

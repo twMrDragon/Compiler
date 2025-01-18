@@ -59,9 +59,7 @@ let rec check_expr var_table = function
               error ~loc:id.loc
                 "(typing) range expected exactly 1 argument(s), got %i"
                 (List.length args))
-      | "range" ->
-          let targs = List.map (check_expr var_table) args in
-          TEcall ({ fn_name = id.id; fn_params = [] }, targs)
+      | "range" -> error ~loc:id.loc "range only used as an argument to list"
       | _ ->
           if not (Hashtbl.mem function_table id.id) then
             error ~loc:id.loc "function %s is not defined" id.id
